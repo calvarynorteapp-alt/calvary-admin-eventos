@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Eventos y Visitantes — Panel de administración</title>
-<link rel="manifest" href="./manifest.json">
+<link rel="manifest" href="./manifest-eventos.json">
 <meta name="theme-color" content="#234E4C">
-<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-eventos-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Eventos/Visitas">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -85,9 +85,17 @@
         <label>Título</label>
         <input type="text" id="evTitulo">
         <label>Fecha</label>
-        <input type="text" id="evFecha" placeholder="AAAA-MM-DD" onfocus="this.type='date'">
+        <input type="date" id="evFecha">
         <label>Descripción</label>
         <textarea id="evDescripcion" rows="2"></textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:14px;">
+          <input type="checkbox" id="evRecurrente" onchange="document.getElementById('evSemanasWrap').style.display=this.checked?'block':'none'">
+          Es un evento recurrente (se repite cada semana)
+        </label>
+        <div id="evSemanasWrap" style="display:none;">
+          <label>¿Cuántas semanas en total?</label>
+          <input type="number" id="evSemanas" min="1" max="52" value="4">
+        </div>
         <button class="btnPrimary" onclick="addEvento()">Agregar evento</button>
       </div>
       <div class="toolbar"><button onclick="loadEventos()">↻ Actualizar</button></div>
@@ -174,7 +182,7 @@ function editEvento(row){
   const el = document.getElementById('evcard-'+row);
   el.innerHTML = `
     <label>Título</label><input type="text" id="et-${row}" value="${escapeAttr(r.Titulo)}">
-    <label>Fecha</label><input type="text" id="ef-${row}" value="${escapeAttr(String(r.Fecha).slice(0,10))}">
+    <label>Fecha</label><input type="date" id="ef-${row}" value="${escapeAttr(String(r.Fecha).slice(0,10))}">
     <label>Descripción</label><textarea id="ed-${row}" rows="2">${escapeHtml(r.Descripcion||'')}</textarea>
     <div class="actions" style="margin-top:10px;">
       <button class="btnGuardar" onclick="saveEvento(${row})">Guardar</button>
@@ -200,10 +208,21 @@ async function addEvento(){
   const fecha = document.getElementById('evFecha').value.trim();
   const descripcion = document.getElementById('evDescripcion').value.trim();
   if(!titulo || !fecha){ alert('Falta título o fecha'); return; }
-  await post({action:'add_evento', titulo, fecha, descripcion});
+
+  const esRecurrente = document.getElementById('evRecurrente').checked;
+  if(esRecurrente){
+    const semanas = parseInt(document.getElementById('evSemanas').value, 10) || 1;
+    const out = await post({action:'add_evento_recurrente', titulo, fecha, descripcion, semanas});
+    if(out && out.ok) alert(`Se crearon ${out.creados} eventos, uno por semana.`);
+  } else {
+    await post({action:'add_evento', titulo, fecha, descripcion});
+  }
+
   document.getElementById('evTitulo').value = '';
   document.getElementById('evFecha').value = '';
   document.getElementById('evDescripcion').value = '';
+  document.getElementById('evRecurrente').checked = false;
+  document.getElementById('evSemanasWrap').style.display = 'none';
   loadEventos();
 }
 
@@ -216,6 +235,17 @@ async function loadVisitantes(){
     renderVisitantes();
   }catch(e){ alert('No se pudo conectar.'); }
 }
+// Si el contacto parece un número de teléfono, lo convierte en un enlace
+// directo de WhatsApp; si no (ej. un correo), lo deja como texto normal.
+function contactoLink(contacto){
+  const soloDigitos = contacto.replace(/[^\d]/g, '');
+  const pareceTelefono = soloDigitos.length >= 8 && soloDigitos.length <= 15;
+  if(pareceTelefono){
+    return `<a href="https://wa.me/${soloDigitos}" target="_blank" rel="noopener" style="color:#2f6b3a;font-weight:600;text-decoration:none;">📞 ${escapeHtml(contacto)} · WhatsApp</a>`;
+  }
+  return '📞 ' + escapeHtml(contacto);
+}
+
 function renderVisitantes(){
   const list = document.getElementById('listVisitantes');
   if(VISITANTES.length === 0){ list.innerHTML = '<div class="empty">No hay visitantes registrados.</div>'; return; }
@@ -226,7 +256,7 @@ function renderVisitantes(){
         <div class="when">${formatDate(r.Fecha)}</div>
       </div>
       <div class="msg">
-        ${r.Contacto ? '📞 ' + escapeHtml(r.Contacto) + '<br>' : ''}
+        ${r.Contacto ? contactoLink(r.Contacto) + '<br>' : ''}
         ${r.Como ? '💬 ' + escapeHtml(r.Como) : ''}
       </div>
       <label>Notas de seguimiento</label>
