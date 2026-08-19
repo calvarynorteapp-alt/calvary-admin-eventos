@@ -159,7 +159,7 @@ async function loadEventos(){
     EVENTOS = out.rows.sort((a,b) => new Date(a.Fecha) - new Date(b.Fecha));
     openApp();
     renderEventos();
-  }catch(e){ alert('No se pudo conectar.'); }
+  }catch(e){ console.error(e); alert('Error: ' + e.message); }
 }
 function renderEventos(){
   const list = document.getElementById('listEventos');
@@ -233,11 +233,12 @@ async function loadVisitantes(){
     if(!out.ok){ document.getElementById('gateError').style.display='block'; openGate(); return; }
     VISITANTES = out.rows.sort((a,b) => new Date(b.Fecha) - new Date(a.Fecha));
     renderVisitantes();
-  }catch(e){ alert('No se pudo conectar.'); }
+  }catch(e){ console.error(e); alert('Error: ' + e.message); }
 }
 // Si el contacto parece un número de teléfono, lo convierte en un enlace
 // directo de WhatsApp; si no (ej. un correo), lo deja como texto normal.
-function contactoLink(contacto){
+function contactoLink(contactoRaw){
+  const contacto = String(contactoRaw == null ? '' : contactoRaw);
   const soloDigitos = contacto.replace(/[^\d]/g, '');
   const pareceTelefono = soloDigitos.length >= 8 && soloDigitos.length <= 15;
   if(pareceTelefono){
